@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         TradeScriptFilterScam
 // @namespace    https://github.com/Letale-vc/TradeScriptFilterScam
-// @version      1.5
-// @description  Automatically filters trade items by ID and supports live search updates
+// @version      1.6
+// @description  Automatically filters trade items by ID and supports live search with delayed results
 // @author       Letale-vc
-// @match        https://www.pathofexile.com/trade*
+// @match        https://www.pathofexile.com/trade2/search/*
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/Letale-vc/TradeScriptFilterScam/main/TradeScriptFilterScam.js
 // @updateURL    https://raw.githubusercontent.com/Letale-vc/TradeScriptFilterScam/main/TradeScriptFilterScam.js
@@ -79,31 +79,25 @@
         }
     }
 
-    // Function to observe changes in the result set for "Live Search"
-    function observeResults() {
-        const resultContainer = document.querySelector(".resultset");
-        if (resultContainer) {
-            const observer = new MutationObserver(() => {
-                filterItems(); // Apply filter to new elements
-                addFilterButton(); // Add buttons to new elements
-            });
+    // Function to observe changes in the DOM and look for new elements
+    function observePageForResults() {
+        const observer = new MutationObserver(() => {
+            const resultContainer = document.querySelector(".resultset");
+            if (resultContainer) {
+                filterItems(); // Apply filters
+                addFilterButton(); // Add buttons to each result
+                addClearButton(); // Add clear filter button
+            }
+        });
 
-            // Observe changes when new items are added to the live search
-            observer.observe(resultContainer, { childList: true, subtree: true });
-        }
+        // Observe changes to the entire body for dynamic elements
+        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     // Initialize the script
     function init() {
-        const observerInterval = setInterval(() => {
-            const resultContainer = document.querySelector(".resultset");
-            if (resultContainer) {
-                filterItems(); // Apply filters when the page loads
-                addClearButton(); // Add clear button
-                observeResults(); // Start observing for new live search results
-                clearInterval(observerInterval); // Stop checking once initialized
-            }
-        }, 500); // Check every 500ms until the result set is loaded
+        console.log("Initializing TradeScriptFilterScam...");
+        observePageForResults(); // Observe changes on the page to detect live search updates
     }
 
     init(); // Start the script
