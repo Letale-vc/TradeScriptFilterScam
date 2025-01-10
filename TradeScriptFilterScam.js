@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         TradeScriptFilterScam
 // @namespace    https://github.com/Letale-vc/TradeScriptFilterScam
-// @version      1.4
-// @description  Automatically filters trade items by ID and applies the filter immediately on search and new elements load
+// @version      1.5
+// @description  Automatically filters trade items by ID and applies the filter immediately on search and new elements load (works on live search)
 // @author       Letale-vc
 // @match        https://www.pathofexile.com/trade*
 // @grant        none
@@ -14,8 +14,6 @@
     'use strict';
 
     const FILTER_KEY = "poe_trade_filtered_ids"; // Key for saving IDs in localStorage
-
-    // Retrieve saved IDs from localStorage or initialize an empty set
     let filteredIDs = new Set(JSON.parse(localStorage.getItem(FILTER_KEY) || "[]"));
 
     // Save filtered IDs to localStorage
@@ -79,7 +77,7 @@
         }
     }
 
-    // Function to observe changes in the result set
+    // Observe changes in live search result container
     function observeResults() {
         const resultContainer = document.querySelector(".resultset");
         if (resultContainer) {
@@ -88,8 +86,7 @@
                 addFilterButton(); // Add buttons to new elements
             });
 
-            // Observe changes in child nodes (when new items are added)
-            observer.observe(resultContainer, { childList: true, subtree: true });
+            observer.observe(resultContainer, { childList: true, subtree: true }); // Watch for added nodes
         }
     }
 
