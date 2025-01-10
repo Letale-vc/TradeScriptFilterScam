@@ -1,11 +1,13 @@
 // ==UserScript==
-// @name         PoE Trade Scam items iD
-// @namespace    http://tampermonkey.net/
-// @version      0.1
+// @name         TradeScriptFilterScam
+// @namespace    https://github.com/Letale-vc/TradeScriptFilterScam
+// @version      1.4
 // @description  Automatically filters trade items by ID and applies the filter immediately on search and new elements load
-// @author       You
+// @author       Letale-vc
 // @match        https://www.pathofexile.com/trade*
 // @grant        none
+// @downloadURL  https://raw.githubusercontent.com/Letale-vc/TradeScriptFilterScam/main/TradeScriptFilterScam.js
+// @updateURL    https://raw.githubusercontent.com/Letale-vc/TradeScriptFilterScam/main/TradeScriptFilterScam.js
 // ==/UserScript==
 
 (function () {
