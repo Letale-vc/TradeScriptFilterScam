@@ -51,7 +51,6 @@
                     if (id) {
                         filteredIDs.add(id); // Add ID to the set
                         saveFilteredIDs(); // Save to localStorage
-                        alert(`Item ${id} added to the filter.`);
                         filterItems(); // Update display
                     }
                 });
@@ -72,7 +71,6 @@
             clearBtn.addEventListener("click", function () {
                 filteredIDs.clear(); // Clear the set of IDs
                 saveFilteredIDs(); // Clear localStorage
-                alert("All filters cleared.");
                 filterItems(); // Reset the display
             });
             header.appendChild(clearBtn); // Add the button to the header
