@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TradeScriptFilterScam
 // @namespace    https://github.com/Letale-vc/TradeScriptFilterScam
-// @version      1.6
+// @version      1.7
 // @description  Automatically filters trade items by ID and supports live search with delayed results
 // @author       Letale-vc
 // @match        https://www.pathofexile.com/trade2/search/*
