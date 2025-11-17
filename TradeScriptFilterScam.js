@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TradeScriptFilterScam
 // @namespace    https://github.com/Letale-vc/TradeScriptFilterScam
-// @version      2.0 
+// @version      2.1 
 // @description  Automatically filters trade items by ID and supports live search with delayed results
 // @author       Letale-vc
 // @match        https://www.pathofexile.com/trade/*
@@ -14,9 +14,11 @@
     'use strict';
 
     const TYPE_FILTER_KEY = "poe_trade_filtered_types"; // Key for saving filtered types in localStorage
+    const MODE_KEY = "poe_trade_filter_mode"; // Key for persisting mode (blacklist/whitelist)
     // Mode: 'blacklist' hides rows whose type matches an entry in the type filter set.
-    // If you prefer inverse behavior (only show listed types), set to 'whitelist'.
-    const TYPE_FILTER_MODE = 'blacklist'; // 'blacklist' | 'whitelist'
+    // 'whitelist' will hide everything except types that match the set.
+    // Default is 'blacklist' but the value is persisted in localStorage and can be toggled in the UI.
+    let typeFilterMode = localStorage.getItem(MODE_KEY) || 'blacklist'; // 'blacklist' | 'whitelist'
     // If true will match types by substring (case-insensitive). If false, exact match (trimmed) is used.
     const TYPE_FILTER_USE_PARTIAL = false;
 
@@ -25,6 +27,10 @@
 
     function saveFilteredTypes() {
         localStorage.setItem(TYPE_FILTER_KEY, JSON.stringify([...filteredTypes]));
+    }
+
+    function saveMode() {
+        localStorage.setItem(MODE_KEY, typeFilterMode);
     }
 
     // Function to hide rows based on filtered IDs
@@ -43,7 +49,7 @@
     }
 
     function shouldHideByType(typeText) {
-        if (TYPE_FILTER_MODE === 'blacklist') {
+        if (typeFilterMode === 'blacklist') {
             return typeMatchesFilter(typeText);
         }
         // whitelist mode: hide when it does NOT match
@@ -120,6 +126,44 @@
             typeList.style.display = 'inline-block';
             header.appendChild(typeList);
 
+            // Input + button to add a type manually
+            const input = document.createElement('input');
+            input.id = 'typeFilterInput';
+            input.placeholder = 'Add type (exact or substring)';
+            input.style.marginLeft = '8px';
+            input.style.padding = '2px 6px';
+            input.style.height = '24px';
+            header.appendChild(input);
+
+            const addBtn = document.createElement('button');
+            addBtn.textContent = 'Add Type';
+            addBtn.style.marginLeft = '6px';
+            addBtn.addEventListener('click', () => {
+                const v = (document.querySelector('#typeFilterInput')?.value || '').trim();
+                if (!v) return;
+                filteredTypes.add(v);
+                saveFilteredTypes();
+                filterItems();
+                updateHeaderTypeBadge();
+                renderTypeFilterList();
+                document.querySelector('#typeFilterInput').value = '';
+            });
+            header.appendChild(addBtn);
+
+            // Mode toggle button (blacklist <-> whitelist)
+            const modeBtn = document.createElement('button');
+            modeBtn.id = 'modeToggleBtn';
+            modeBtn.style.marginLeft = '8px';
+            modeBtn.addEventListener('click', () => {
+                typeFilterMode = (typeFilterMode === 'blacklist') ? 'whitelist' : 'blacklist';
+                saveMode();
+                updateModeUI();
+                filterItems();
+            });
+            header.appendChild(modeBtn);
+
+            updateModeUI();
+
             updateHeaderTypeBadge();
             renderTypeFilterList();
         }
@@ -134,6 +178,13 @@
         } else {
             badge.textContent = ` Type filters: ${count}`;
         }
+    }
+
+    function updateModeUI() {
+        const btn = document.querySelector('#modeToggleBtn');
+        if (!btn) return;
+        btn.textContent = `Mode: ${typeFilterMode}`;
+        btn.title = (typeFilterMode === 'blacklist') ? 'Blacklist mode: hide listed types' : 'Whitelist mode: show only listed types';
     }
 
     function renderTypeFilterList() {
