@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TradeScriptFilterScam
 // @namespace    https://github.com/Letale-vc/TradeScriptFilterScam
-// @version      2.1 
+// @version      2.2
 // @description  Automatically filters trade items by ID and supports live search with delayed results
 // @author       Letale-vc
 // @match        https://www.pathofexile.com/trade/*
@@ -13,8 +13,11 @@
 (function () {
     'use strict';
 
-    const TYPE_FILTER_KEY = "poe_trade_filtered_types"; // Key for saving filtered types in localStorage
+    const TYPE_FILTER_KEY = "poe_trade_filtered_types"; // legacy key (migrated into exclude list)
+    const EXCLUDE_KEY = "poe_trade_exclude_types"; // new persistent exclude list
+    const INCLUDE_KEY = "poe_trade_include_types"; // new persistent include list
     const MODE_KEY = "poe_trade_filter_mode"; // Key for persisting mode (blacklist/whitelist)
+    const MIGRATED_KEY = "poe_trade_types_migrated"; // flag to indicate migration performed
     // Mode: 'blacklist' hides rows whose type matches an entry in the type filter set.
     // 'whitelist' will hide everything except types that match the set.
     // Default is 'blacklist' but the value is persisted in localStorage and can be toggled in the UI.
@@ -22,30 +25,54 @@
     // If true will match types by substring (case-insensitive). If false, exact match (trimmed) is used.
     const TYPE_FILTER_USE_PARTIAL = false;
 
-    // Retrieve saved types from localStorage or initialize an empty set
-    let filteredTypes = new Set(JSON.parse(localStorage.getItem(TYPE_FILTER_KEY) || "[]"));
+    // Retrieve saved include/exclude sets from localStorage
+    let excludeTypes = new Set(JSON.parse(localStorage.getItem(EXCLUDE_KEY) || "[]"));
+    let includeTypes = new Set(JSON.parse(localStorage.getItem(INCLUDE_KEY) || "[]"));
 
+    // Migration: if legacy TYPE_FILTER_KEY exists and migration not done, migrate it to excludeTypes
+    try {
+        const migrated = localStorage.getItem(MIGRATED_KEY);
+        const legacy = JSON.parse(localStorage.getItem(TYPE_FILTER_KEY) || "[]");
+        if (!migrated && Array.isArray(legacy) && legacy.length > 0 && excludeTypes.size === 0 && includeTypes.size === 0) {
+            legacy.forEach(t => excludeTypes.add(t));
+            localStorage.setItem(EXCLUDE_KEY, JSON.stringify([...excludeTypes]));
+            localStorage.setItem(MIGRATED_KEY, '1');
+        }
+    } catch (e) {
+        // ignore parse errors
+    }
+
+    // Save both lists (keeps both up-to-date). We also persist legacy key for backward compatibility.
     function saveFilteredTypes() {
-        localStorage.setItem(TYPE_FILTER_KEY, JSON.stringify([...filteredTypes]));
+        localStorage.setItem(EXCLUDE_KEY, JSON.stringify([...excludeTypes]));
+        localStorage.setItem(INCLUDE_KEY, JSON.stringify([...includeTypes]));
+        try {
+            localStorage.setItem(TYPE_FILTER_KEY, JSON.stringify([...excludeTypes]));
+        } catch (e) {}
     }
 
     function saveMode() {
         localStorage.setItem(MODE_KEY, typeFilterMode);
     }
 
-    // Function to hide rows based on filtered IDs
+    function getActiveSet() {
+        return (typeFilterMode === 'blacklist') ? excludeTypes : includeTypes;
+    }
+
+    // Function to check whether a type matches the active filter set
     function typeMatchesFilter(typeText) {
         if (!typeText) return false;
         const normalized = typeText.trim();
-        if (filteredTypes.size === 0) return false;
+        const active = getActiveSet();
+        if (active.size === 0) return false;
         if (TYPE_FILTER_USE_PARTIAL) {
             const lower = normalized.toLowerCase();
-            for (const t of filteredTypes) {
+            for (const t of active) {
                 if (lower.includes(t.toLowerCase())) return true;
             }
             return false;
         }
-        return filteredTypes.has(normalized);
+        return active.has(normalized);
     }
 
     function shouldHideByType(typeText) {
@@ -53,7 +80,7 @@
             return typeMatchesFilter(typeText);
         }
         // whitelist mode: hide when it does NOT match
-        return filteredTypes.size > 0 && !typeMatchesFilter(typeText);
+        return getActiveSet().size > 0 && !typeMatchesFilter(typeText);
     }
 
     function filterItems() {
@@ -83,7 +110,7 @@
                     const typeNode = row.querySelector('.itemName.typeLine .lc');
                     const typeText = typeNode ? typeNode.textContent.trim() : null;
                     if (!typeText) return;
-                    filteredTypes.add(typeText);
+                    getActiveSet().add(typeText);
                     saveFilteredTypes();
                     filterItems();
                     updateHeaderTypeBadge();
@@ -105,7 +132,8 @@
             clearTypesBtn.style.marginLeft = '10px';
             clearTypesBtn.style.cursor = 'pointer';
             clearTypesBtn.addEventListener('click', function () {
-                filteredTypes.clear();
+                // clear only the active list to avoid losing the other list
+                getActiveSet().clear();
                 saveFilteredTypes();
                 filterItems();
                 updateHeaderTypeBadge();
@@ -141,7 +169,7 @@
             addBtn.addEventListener('click', () => {
                 const v = (document.querySelector('#typeFilterInput')?.value || '').trim();
                 if (!v) return;
-                filteredTypes.add(v);
+                getActiveSet().add(v);
                 saveFilteredTypes();
                 filterItems();
                 updateHeaderTypeBadge();
@@ -172,11 +200,16 @@
     function updateHeaderTypeBadge() {
         const badge = document.querySelector('#typeFilterBadge');
         if (!badge) return;
-        const count = filteredTypes.size;
+    const count = getActiveSet().size;
         if (count === 0) {
             badge.textContent = '';
         } else {
-            badge.textContent = ` Type filters: ${count}`;
+            // Show different label depending on current mode
+            if (typeFilterMode === 'blacklist') {
+                badge.textContent = ` Exclude list: ${count}`;
+            } else {
+                badge.textContent = ` Include list: ${count}`;
+            }
         }
     }
 
@@ -185,6 +218,17 @@
         if (!btn) return;
         btn.textContent = `Mode: ${typeFilterMode}`;
         btn.title = (typeFilterMode === 'blacklist') ? 'Blacklist mode: hide listed types' : 'Whitelist mode: show only listed types';
+        // update related UI text/placeholders to match mode
+        const input = document.querySelector('#typeFilterInput');
+        if (input) {
+            input.placeholder = (typeFilterMode === 'blacklist') ? 'Add type to exclude' : 'Add type to include';
+        }
+        const clearBtn = document.querySelector('#clearTypeFilterBtn');
+        if (clearBtn) {
+            clearBtn.textContent = (typeFilterMode === 'blacklist') ? 'Clear Exclude Filters' : 'Clear Include Filters';
+        }
+        // Re-render pills to reflect mode (color/label)
+        renderTypeFilterList();
     }
 
     function renderTypeFilterList() {
@@ -192,15 +236,17 @@
         if (!container) return;
         // Clear existing
         container.innerHTML = '';
-        if (filteredTypes.size === 0) return;
-        // For each type, create a pill with remove button
-        filteredTypes.forEach(t => {
+    const active = getActiveSet();
+    if (active.size === 0) return;
+    // For each type, create a pill with remove button
+    active.forEach(t => {
             const pill = document.createElement('span');
             pill.style.border = '1px solid #ccc';
             pill.style.padding = '2px 6px';
             pill.style.marginRight = '6px';
             pill.style.borderRadius = '12px';
-            pill.style.background = '#f7f7f7';
+            // color pill based on mode: red for exclude, green for include
+            pill.style.background = (typeFilterMode === 'blacklist') ? '#ffecec' : '#eaffea';
             pill.style.display = 'inline-block';
             pill.style.fontSize = '12px';
 
@@ -214,7 +260,7 @@
             rem.style.marginLeft = '6px';
             rem.style.cursor = 'pointer';
             rem.addEventListener('click', () => {
-                filteredTypes.delete(t);
+                getActiveSet().delete(t);
                 saveFilteredTypes();
                 filterItems();
                 updateHeaderTypeBadge();
