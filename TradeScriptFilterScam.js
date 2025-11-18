@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TradeScriptFilterScam
 // @namespace    https://github.com/Letale-vc/TradeScriptFilterScam
-// @version      2.2
+// @version      2.3
 // @description  Automatically filters trade items by ID and supports live search with delayed results
 // @author       Letale-vc
 // @match        https://www.pathofexile.com/trade/*
@@ -28,6 +28,14 @@
     // Retrieve saved include/exclude sets from localStorage
     let excludeTypes = new Set(JSON.parse(localStorage.getItem(EXCLUDE_KEY) || "[]"));
     let includeTypes = new Set(JSON.parse(localStorage.getItem(INCLUDE_KEY) || "[]"));
+
+    const ENABLE_KEY = 'poe_trade_filters_enabled';
+    // master enable flag (default false)
+    let filtersEnabled = JSON.parse(localStorage.getItem(ENABLE_KEY) || 'false');
+
+    function saveEnabled() {
+        localStorage.setItem(ENABLE_KEY, JSON.stringify(!!filtersEnabled));
+    }
 
     // Migration: if legacy TYPE_FILTER_KEY exists and migration not done, migrate it to excludeTypes
     try {
@@ -97,6 +105,7 @@
 
     // Add a "Filter this" button to each row
     function addFilterButton() {
+        if (!filtersEnabled) return;
         const rows = document.querySelectorAll(".resultset .row");
         rows.forEach(row => {
             // Only add the "Filter type" button (type-based filtering)
@@ -123,6 +132,7 @@
 
     // Add a "Clear Filter" button to reset all filtered IDs
     function addClearButton() {
+        if (!filtersEnabled) return;
         const header = document.querySelector(".row.row-total");
         if (header && !document.querySelector("#clearTypeFilterBtn")) {
             // Add a clear types button and badge/list for type filters
@@ -195,6 +205,59 @@
             updateHeaderTypeBadge();
             renderTypeFilterList();
         }
+    }
+
+    // Master control: always present (checkbox) so user can enable/disable the whole feature
+    function addMasterControl() {
+        const header = document.querySelector('.row.row-total');
+        if (!header) return;
+        if (document.querySelector('#masterFilterControl')) return;
+        const wrapper = document.createElement('div');
+        wrapper.id = 'masterFilterControl';
+        wrapper.style.display = 'inline-block';
+        wrapper.style.marginRight = '8px';
+
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.id = 'filterMasterToggle';
+        chk.checked = !!filtersEnabled;
+        chk.style.verticalAlign = 'middle';
+        chk.addEventListener('change', () => {
+            filtersEnabled = !!chk.checked;
+            saveEnabled();
+            if (filtersEnabled) {
+                // enable UI and apply filters
+                addClearButton();
+                addFilterButton();
+                filterItems();
+            } else {
+                // disable: remove ui and show all rows
+                removeFilterUI();
+                const rows = document.querySelectorAll('.resultset .row');
+                rows.forEach(r => r.style.display = '');
+            }
+        });
+
+        const lbl = document.createElement('label');
+        lbl.htmlFor = 'filterMasterToggle';
+        lbl.textContent = 'Enable Filters';
+        lbl.style.marginLeft = '6px';
+        lbl.style.marginRight = '8px';
+        lbl.style.verticalAlign = 'middle';
+
+        wrapper.appendChild(chk);
+        wrapper.appendChild(lbl);
+        header.insertBefore(wrapper, header.firstChild);
+    }
+
+    function removeFilterUI() {
+        // remove header UI elements created by addClearButton
+        ['clearTypeFilterBtn','typeFilterBadge','typeFilterList','typeFilterInput','modeToggleBtn'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        });
+        // remove any per-row filter buttons
+        document.querySelectorAll('.filter-type-btn').forEach(b => b.remove());
     }
 
     function updateHeaderTypeBadge() {
@@ -278,6 +341,9 @@
         const observer = new MutationObserver(() => {
             const resultContainer = document.querySelector(".resultset");
             if (resultContainer) {
+                // Ensure master control exists (always visible) so user can enable the feature
+                addMasterControl();
+                if (!filtersEnabled) return; // do nothing until user enables
                 filterItems(); // Apply filters
                 addFilterButton(); // Add buttons to each result
                 addClearButton(); // Add clear filter button
@@ -292,6 +358,17 @@
     function init() {
         console.log("Initializing TradeScriptFilterScam...");
         observePageForResults(); // Observe changes on the page to detect live search updates
+        // Ensure master control present immediately
+        // (observer will add it too when results appear)
+        setTimeout(() => addMasterControl(), 200);
+        // If enabled on load, initialize UI immediately
+        if (filtersEnabled) {
+            setTimeout(() => {
+                addClearButton();
+                addFilterButton();
+                filterItems();
+            }, 300);
+        }
     }
 
     init(); // Start the script
